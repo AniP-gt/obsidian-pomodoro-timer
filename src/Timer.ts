@@ -9,7 +9,7 @@ import DEFAULT_NOTIFICATION from 'Notification'
 import type { Unsubscriber } from 'svelte/motion'
 import type { TaskItem } from 'Tasks'
 
-export type Mode = 'WORK' | 'BREAK'
+export type Mode = 'WORK' | 'BREAK' | 'LONG_BREAK'
 
 export type TimerRemained = {
     millis: number
@@ -49,6 +49,9 @@ export type TimerState = {
     inSession: boolean
     workLen: number
     breakLen: number
+    longBreakLen: number
+    pomodorosUntilLongBreak: number
+    completedPomodoros: number
     count: number
     duration: number
 }
@@ -85,6 +88,9 @@ export default class Timer implements Readable<TimerStore> {
             autostart: plugin.getSettings().autostart,
             workLen: plugin.getSettings().workLen,
             breakLen: plugin.getSettings().breakLen,
+            longBreakLen: plugin.getSettings().longBreakLen,
+            pomodorosUntilLongBreak: plugin.getSettings().pomodorosUntilLongBreak,
+            completedPomodoros: 0,
             running: false,
             // lastTick: 0,
             mode: 'WORK',
@@ -194,7 +200,13 @@ export default class Timer implements Readable<TimerStore> {
             if (!s.inSession) {
                 // new session
                 s.elapsed = 0
-                s.duration = s.mode === 'WORK' ? s.workLen : s.breakLen
+                if (s.mode === 'WORK') {
+                    s.duration = s.workLen
+                } else if (s.mode === 'LONG_BREAK') {
+                    s.duration = s.longBreakLen
+                } else {
+                    s.duration = s.breakLen
+                }
                 s.count = s.duration * 60 * 1000
                 s.startTime = now
             }
@@ -210,12 +222,31 @@ export default class Timer implements Readable<TimerStore> {
 
     private endSession(state: TimerState) {
         // setup new session
-        if (state.breakLen == 0) {
-            state.mode = 'WORK'
+        if (state.mode === 'WORK') {
+            state.completedPomodoros++
+            // Check if it's time for a long break
+            if (state.pomodorosUntilLongBreak > 0 && 
+                state.completedPomodoros % state.pomodorosUntilLongBreak === 0) {
+                state.mode = 'LONG_BREAK'
+            } else if (state.breakLen > 0) {
+                state.mode = 'BREAK'
+            } else {
+                // If break is disabled, continue with work
+                state.mode = 'WORK'
+            }
         } else {
-            state.mode = state.mode == 'WORK' ? 'BREAK' : 'WORK'
+            // After any break, go back to work
+            state.mode = 'WORK'
         }
-        state.duration = state.mode == 'WORK' ? state.workLen : state.breakLen
+        
+        if (state.mode === 'WORK') {
+            state.duration = state.workLen
+        } else if (state.mode === 'LONG_BREAK') {
+            state.duration = state.longBreakLen
+        } else {
+            state.duration = state.breakLen
+        }
+        
         state.count = state.duration * 60 * 1000
         state.inSession = false
         state.running = false
@@ -229,9 +260,10 @@ export default class Timer implements Readable<TimerStore> {
     }
 
     private notify(state: TimerState, logFile: TFile | void) {
-        const emoji = state.mode == 'WORK' ? '🍅' : '🥤'
+        const emoji = state.mode === 'WORK' ? '🍅' : state.mode === 'LONG_BREAK' ? '🏖️' : '🥤'
+        const breakType = state.mode === 'LONG_BREAK' ? 'taking a long break' : 'breaking'
         const text = `${emoji} You have been ${
-            state.mode === 'WORK' ? 'working' : 'breaking'
+            state.mode === 'WORK' ? 'working' : breakType
         } for ${state.duration} minutes.`
 
         if (this.plugin.getSettings().useSystemNotification) {
@@ -283,8 +315,13 @@ export default class Timer implements Readable<TimerStore> {
                 this.logger.log(this.createLogContext(state))
             }
 
-            state.duration =
-                state.mode == 'WORK' ? state.workLen : state.breakLen
+            if (state.mode === 'WORK') {
+                state.duration = state.workLen
+            } else if (state.mode === 'LONG_BREAK') {
+                state.duration = state.longBreakLen
+            } else {
+                state.duration = state.breakLen
+            }
             state.count = state.duration * 60 * 1000
             state.inSession = false
             state.running = false
@@ -333,13 +370,20 @@ export default class Timer implements Readable<TimerStore> {
 
     public setupTimer() {
         this.update((state) => {
-            const { workLen, breakLen, autostart } = this.plugin.getSettings()
+            const { workLen, breakLen, longBreakLen, pomodorosUntilLongBreak, autostart } = this.plugin.getSettings()
             state.workLen = workLen
             state.breakLen = breakLen
+            state.longBreakLen = longBreakLen
+            state.pomodorosUntilLongBreak = pomodorosUntilLongBreak
             state.autostart = autostart
             if (!state.running && !state.inSession) {
-                state.duration =
-                    state.mode == 'WORK' ? state.workLen : state.breakLen
+                if (state.mode === 'WORK') {
+                    state.duration = state.workLen
+                } else if (state.mode === 'LONG_BREAK') {
+                    state.duration = state.longBreakLen
+                } else {
+                    state.duration = state.breakLen
+                }
                 state.count = state.duration * 60 * 1000
             }
 

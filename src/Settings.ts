@@ -10,13 +10,15 @@ import {
 } from 'utils'
 
 type LogFileType = 'DAILY' | 'WEEKLY' | 'FILE' | 'NONE'
-type LogLevel = 'ALL' | 'WORK' | 'BREAK'
+type LogLevel = 'ALL' | 'WORK' | 'BREAK' | 'LONG_BREAK'
 type LogFormat = 'SIMPLE' | 'VERBOSE' | 'CUSTOM'
 export type TaskFormat = 'TASKS' | 'DATAVIEW'
 
 export interface Settings {
     workLen: number
     breakLen: number
+    longBreakLen: number
+    pomodorosUntilLongBreak: number
     autostart: boolean
     useStatusBarTimer: boolean
     notificationSound: boolean
@@ -38,6 +40,8 @@ export default class PomodoroSettings extends PluginSettingTab {
     static readonly DEFAULT_SETTINGS: Settings = {
         workLen: 25,
         breakLen: 5,
+        longBreakLen: 15,
+        pomodorosUntilLongBreak: 4,
         autostart: false,
         useStatusBarTimer: false,
         notificationSound: true,
@@ -101,6 +105,72 @@ export default class PomodoroSettings extends PluginSettingTab {
     public display() {
         const { containerEl } = this
         containerEl.empty()
+
+        new Setting(containerEl).setHeading().setName('Timer')
+
+        new Setting(containerEl)
+            .setName('Work duration')
+            .setDesc('Work session duration in minutes')
+            .addSlider((slider) => {
+                slider
+                    .setLimits(1, 60, 1)
+                    .setValue(this._settings.workLen)
+                    .setDynamicTooltip()
+                    .onChange((value) => {
+                        this.updateSettings({ workLen: value })
+                    })
+            })
+
+        new Setting(containerEl)
+            .setName('Break duration')
+            .setDesc('Short break duration in minutes')
+            .addSlider((slider) => {
+                slider
+                    .setLimits(1, 30, 1)
+                    .setValue(this._settings.breakLen)
+                    .setDynamicTooltip()
+                    .onChange((value) => {
+                        this.updateSettings({ breakLen: value })
+                    })
+            })
+
+        new Setting(containerEl)
+            .setName('Long break duration')
+            .setDesc('Long break duration in minutes')
+            .addSlider((slider) => {
+                slider
+                    .setLimits(1, 60, 1)
+                    .setValue(this._settings.longBreakLen)
+                    .setDynamicTooltip()
+                    .onChange((value) => {
+                        this.updateSettings({ longBreakLen: value })
+                    })
+            })
+
+        new Setting(containerEl)
+            .setName('Pomodoros until long break')
+            .setDesc('Number of work sessions before a long break')
+            .addSlider((slider) => {
+                slider
+                    .setLimits(2, 10, 1)
+                    .setValue(this._settings.pomodorosUntilLongBreak)
+                    .setDynamicTooltip()
+                    .onChange((value) => {
+                        this.updateSettings({ pomodorosUntilLongBreak: value })
+                    })
+            })
+
+        new Setting(containerEl)
+            .setName('Auto start')
+            .setDesc('Automatically start the next session')
+            .addToggle((toggle) => {
+                toggle.setValue(this._settings.autostart)
+                toggle.onChange((value) => {
+                    this.updateSettings({ autostart: value })
+                })
+            })
+
+        new Setting(containerEl).setHeading().setName('Display')
 
         new Setting(containerEl)
             .setName('Enable Status Bar Timer')

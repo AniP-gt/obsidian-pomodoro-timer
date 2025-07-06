@@ -62,6 +62,8 @@ const toggleExtra = (value: 'settings' | 'tasks') => {
                     {#if $timer.running}<span class="breath"></span>{/if}
                     {#if $timer.mode === 'WORK'}
                         <span class="mode">Work</span>
+                    {:else if $timer.mode === 'LONG_BREAK'}
+                        <span class="mode">Long Break</span>
                     {:else}
                         <span class="mode">Break</span>
                     {/if}
